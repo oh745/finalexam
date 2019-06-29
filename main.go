@@ -136,8 +136,9 @@ func putCustomerById(c *gin.Context){
 	db := connectDB(c)
 	defer db.Close()
 
-	stmt,err := db.Prepare("UPDATE Customer SET name=$2,email=$3,status=$4 WHERE id=$1")
+	stmt,err := db.Prepare("UPDATE Customer SET name=$2,email=$3,status=$4 WHERE id=$1 RETURNING id,name,email,status")
 	if err != nil{
+		log.Println(err.Error())
 		c.JSON(http.StatusInternalServerError, err)
 		return
 	}
@@ -145,6 +146,7 @@ func putCustomerById(c *gin.Context){
 	row := stmt.QueryRow(t.ID,t.Name,t.Email,t.Status)
 	err1 := row.Scan(&t.ID,&t.Name,&t.Email ,&t.Status)
 		if err1 != nil{
+			log.Println(err.Error())
 			c.JSON(http.StatusInternalServerError, err)
 			return
 		}
