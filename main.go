@@ -109,9 +109,9 @@ func getCustomerById(c *gin.Context) {
 }
 
 func deleteCustomerById(c *gin.Context){
-	t := Customer{}
 	id := c.Param("id")
-	db,_ := sql.Open("postgres",os.Getenv("DATABASE_URL"))
+	db := connectDB(c)
+	defer db.Close()
 	stmt := `DELETE FROM Customer WHERE id = $1`
 	
 	_,err := db.Exec(stmt,id)
@@ -120,7 +120,9 @@ func deleteCustomerById(c *gin.Context){
 		return
 	}
 
-	c.JSON(200, t)
+	c.JSON(200, gin.H{
+		"message": "customer deleted",
+	})
 }
 
 func putCustomerById(c *gin.Context){
