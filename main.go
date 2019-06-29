@@ -50,27 +50,23 @@ func postCustomerHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, err)
 		return
 	}
-
-	uri := os.Getenv("DATABASE_URL")
-	db,err := sql.Open("postgres",uri)
-	if err != nil {
-		log.Fatal("fatal",err.Error())
-	}
+	db := connectDB(c)
 	defer db.Close()
 
 	query := `INSERT INTO Customer (name,email,status) VALUES ($1,$2,$3) RETURNING id`
 	var id int
 	row := db.QueryRow(query ,t.Name,t.Email,t.Status)
-	err = row.Scan(&id)
+	err := row.Scan(&id)
 	if err != nil {
-		log.Fatal("cant scan id",err.Error())
+		c.JSON(http.StatusInternalServerError, err)
+		return
 	}
 	t.ID = id
 	c.JSON(201, t)
 }
 
 func getCustomerHandler(c *gin.Context) {
-	db,_ := sql.Open("postgres",os.Getenv("DATABASE_URL"))
+	db := connectDB(c)
 	stmt,_ := db.Prepare("SELECT * FROM Customer")
 	rows,_ := stmt.Query()
 
@@ -81,7 +77,8 @@ func getCustomerHandler(c *gin.Context) {
 		t := Customer{}
 		err1 := rows.Scan(&t.ID,&t.Name,&t.Email ,&t.Status)
 		if err1 != nil{
-			log.Fatal("error scan", err1.Error())
+			c.JSON(http.StatusInternalServerError, err1)
+			return
 		}
 		todos = append(todos,t)
 	}
@@ -93,17 +90,19 @@ func getCustomerHandler(c *gin.Context) {
 func getCustomerById(c *gin.Context) {
 	t := Customer{}
 	id := c.Param("id")
-	db,_ := sql.Open("postgres",os.Getenv("DATABASE_URL"))
+	db := connectDB(c)
 	stmt,err := db.Prepare("SELECT * FROM Customer WHERE id = $1")
 	if err != nil{
-
+		c.JSON(http.StatusInternalServerError, err)
+		return
 	}
 
 	row := stmt.QueryRow(id)
 
 	err1 := row.Scan(&t.ID,&t.Name,&t.Email ,&t.Status)
 		if err1 != nil{
-			log.Fatal("error scan", err.Error())
+			c.JSON(http.StatusInternalServerError, err)
+			return
 		}
 
 	c.JSON(http.StatusOK, t)
@@ -117,22 +116,44 @@ func deleteCustomerById(c *gin.Context){
 	
 	_,err := db.Exec(stmt,id)
 	if err != nil{
-
+		c.JSON(http.StatusInternalServerError, err)
+		return
 	}
 
-	//row.Scan(&t.ID,&t.Title, &t.Status)
 	c.JSON(200, t)
 }
 
 func putCustomerById(c *gin.Context){
+	t := Customer{}
+	
+	if err := c.ShouldBindJSON(&t); err != nil {
+		c.JSON(http.StatusBadRequest, err)
+		return
+	}
 
+	db := connectDB(c)
+	defer db.Close()
+
+	stmt,err := db.Prepare("UPDATE Customer SET name=$2,email=$3,status=$4 WHERE id=$1")
+	if err != nil{
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+
+	row := stmt.QueryRow(t.ID,t.Name,t.Email,t.Status)
+	err1 := row.Scan(&t.ID,&t.Name,&t.Email ,&t.Status)
+		if err1 != nil{
+			c.JSON(http.StatusInternalServerError, err)
+			return
+		}
+
+	c.JSON(http.StatusOK, t)
 }
 
 func checkDataBaseExist(){
-	uri := os.Getenv("DATABASE_URL")
-	db,err := sql.Open("postgres",uri)
+	db,err := sql.Open("postgres",os.Getenv("DATABASE_URL"))
 	if err != nil {
-		log.Fatal("fatal",err.Error())
+		log.Fatal("cant connect db",err.Error())
 	}
 	defer db.Close()
 
@@ -149,9 +170,19 @@ func checkDataBaseExist(){
 	}
 }
 
+func connectDB(c *gin.Context) *sql.DB {
+	uri := os.Getenv("DATABASE_URL")
+	db,err := sql.Open("postgres",uri)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+		return nil
+	}
+	return db
+}
+
 type Customer struct {
-	ID int
-	Name string
-	Email string
-	Status string
+	ID int `json:"id"`
+	Name string `json:"name"`
+	Email string `json:"email"`
+	Status string `json:"status"`
 }
